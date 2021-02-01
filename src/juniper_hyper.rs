@@ -6,31 +6,10 @@ use hyper::{
 };
 use juniper::{
     http::{GraphQLBatchRequest, GraphQLRequest as JuniperGraphQLRequest, GraphQLRequest},
-    GraphQLSubscriptionType, GraphQLType, GraphQLTypeAsync, InputValue, RootNode, ScalarValue,
+    GraphQLSubscriptionType, GraphQLTypeAsync, InputValue, RootNode, ScalarValue,
 };
 use serde_json::error::Error as SerdeError;
 use url::form_urlencoded;
-
-pub async fn graphql_sync<CtxT, QueryT, MutationT, SubscriptionT, S>(
-    root_node: Arc<RootNode<'static, QueryT, MutationT, SubscriptionT, S>>,
-    context: Arc<CtxT>,
-    req: Request<Body>,
-) -> Result<Response<Body>, hyper::Error>
-where
-    QueryT: GraphQLType<S, Context = CtxT>,
-    QueryT::TypeInfo: Sync,
-    MutationT: GraphQLType<S, Context = CtxT>,
-    MutationT::TypeInfo: Sync,
-    SubscriptionT: GraphQLType<S, Context = CtxT>,
-    SubscriptionT::TypeInfo: Sync,
-    CtxT: Sync,
-    S: ScalarValue + Send + Sync,
-{
-    Ok(match parse_req(req).await {
-        Ok(req) => execute_request_sync(root_node, context, req).await,
-        Err(resp) => resp,
-    })
-}
 
 pub async fn graphql<CtxT, QueryT, MutationT, SubscriptionT, S>(
     root_node: Arc<RootNode<'static, QueryT, MutationT, SubscriptionT, S>>,
@@ -145,37 +124,6 @@ fn render_error(err: GraphQLRequestError) -> Response<Body> {
     let message = format!("{}", err);
     let mut resp = new_response(StatusCode::BAD_REQUEST);
     *resp.body_mut() = Body::from(message);
-    resp
-}
-
-async fn execute_request_sync<CtxT, QueryT, MutationT, SubscriptionT, S>(
-    root_node: Arc<RootNode<'static, QueryT, MutationT, SubscriptionT, S>>,
-    context: Arc<CtxT>,
-    request: GraphQLBatchRequest<S>,
-) -> Response<Body>
-where
-    QueryT: GraphQLType<S, Context = CtxT>,
-    QueryT::TypeInfo: Sync,
-    MutationT: GraphQLType<S, Context = CtxT>,
-    MutationT::TypeInfo: Sync,
-    SubscriptionT: GraphQLType<S, Context = CtxT>,
-    SubscriptionT::TypeInfo: Sync,
-    CtxT: Sync,
-    S: ScalarValue + Send + Sync,
-{
-    let res = request.execute_sync(&*root_node, &context);
-    let body = Body::from(serde_json::to_string_pretty(&res).unwrap());
-    let code = if res.is_ok() {
-        StatusCode::OK
-    } else {
-        StatusCode::BAD_REQUEST
-    };
-    let mut resp = new_response(code);
-    resp.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/json"),
-    );
-    *resp.body_mut() = body;
     resp
 }
 
